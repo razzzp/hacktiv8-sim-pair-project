@@ -24,3 +24,4 @@ CREATE TABLE Sales(
     Sale_date DATE NOT NULL,
 	CONSTRAINT fk_salesProduct FOREIGN KEY (ProductID) 	REFERENCES Products(ID)
 )
+
