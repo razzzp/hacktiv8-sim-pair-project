@@ -85,12 +85,18 @@ func main() {
 		switch input {
 			case "1":
 				product := getAddProdParam(reader)
+				if isZeroValue(product) {
+					continue
+				}
 				addProduct(db, product.Name, product.Price, product.Stock)
 				fmt.Println("")
 			case "2":
 				break menuLoop;
 			case "3":
 				staff := getAddStaffParam(reader)
+				if isZeroValue(staff) {
+					continue
+				}
 				addStaff(db, staff.Name, staff.Email, staff.Position)
 				fmt.Println("")
 			case "4":
@@ -100,6 +106,34 @@ func main() {
 		}
 	}
 }
+
+//function to make user able to select option wether backt reinputting or to main menu
+func selectOption [K Staff | Product ] (reader *bufio.Reader, function func(*bufio.Reader) K) K {
+	fmt.Printf("Would you like to reinput data (y/n): ")
+	resp, err := reader.ReadString('\n')
+	if err != nil {
+		log.Fatal("Error reading response input", err)
+	}
+	resp = strings.TrimSpace(resp)
+	var zero K
+	switch resp {
+	case "y":
+		return function(reader)
+	case "n":
+		return zero
+	default:
+		fmt.Println("Input invalid, please reinput response")
+		selectOption(reader, function)
+	}
+	return zero
+
+}
+//function to make user back to main menu
+func isZeroValue[K Staff | Product](value K) bool {
+	var zero K
+	return value == zero
+}
+
 func isValidEmail(email string) bool {
 	_, err := mail.ParseAddress(email)
 	return err == nil
@@ -115,7 +149,7 @@ func getAddStaffParam(reader *bufio.Reader) Staff {
 	staffName = strings.TrimSpace(staffName)
 	if staffName == "" {
 		log.Println("Staff name should not be empty")
-		return getAddStaffParam(reader)
+		return selectOption(reader, getAddStaffParam)
 	}
 
 	//get staff email 
@@ -127,12 +161,12 @@ func getAddStaffParam(reader *bufio.Reader) Staff {
 	email = strings.TrimSpace(email)
 	if email == "" {
 		log.Println("Staff email should not be empty")
-		return getAddStaffParam(reader)
+		return selectOption(reader, getAddStaffParam)
 	}
 	//validate email
 	if res := isValidEmail(email); !res {
 		log.Println("Invalid Email Format")
-		return getAddStaffParam(reader)
+		return selectOption(reader, getAddStaffParam)
 	}
 
 	//get staff position 
@@ -144,7 +178,7 @@ func getAddStaffParam(reader *bufio.Reader) Staff {
 	position = strings.TrimSpace(position)
 	if position == "" {
 		log.Println("Staff position should not be empty")
-		return getAddStaffParam(reader)
+		return selectOption(reader, getAddStaffParam)
 	}
 
 	return Staff{
@@ -174,7 +208,8 @@ func getAddProdParam(reader *bufio.Reader) Product {
 	prodName = strings.TrimSpace(prodName)
 	if prodName == "" {
 		log.Println("Product name should not be empty")
-		return getAddProdParam(reader)
+		return selectOption(reader, getAddProdParam)
+
 	}
 
 	//get product price 
@@ -186,9 +221,8 @@ func getAddProdParam(reader *bufio.Reader) Product {
 	price = strings.TrimSpace(price)
 	priceFlt, err := strconv.ParseFloat(price, 64)
 	if err != nil {
-		// log.Println("Error converting price to float64 ", err)
 		log.Println("Price should be a number")
-		return getAddProdParam(reader)
+		return selectOption(reader, getAddProdParam)
 	}
 
 	//get product stock 
@@ -200,10 +234,13 @@ func getAddProdParam(reader *bufio.Reader) Product {
 	stock = strings.TrimSpace(stock)
 	stockInt, err := strconv.Atoi(stock)
 	if err != nil {
-		// log.Fatal("Error converting stock to int ", err)
 		log.Println("Stock should be a number")
-		return getAddProdParam(reader)
+		return selectOption(reader, getAddProdParam)
 		
+	}
+	if stockInt < 0 {
+		log.Println("Stock should be a positive number")
+		return selectOption(reader, getAddProdParam)
 	}
 	return Product{
 		Name: prodName,
