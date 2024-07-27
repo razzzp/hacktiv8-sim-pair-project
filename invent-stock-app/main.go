@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
+	"invent-stock-app/repo"
 	"log"
 	"net/mail"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -14,24 +16,23 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type Product struct {
-	Name string
-	Price float64
-	Stock int
-}
-
 type Staff struct {
-	Name string
-	Email string
+	Name     string
+	Email    string
 	Position string
 }
 
-func displayMenu () {
+type MenuItem struct {
+	rank int
+	name string
+}
+
+func displayMenu() {
 
 	menu := map[int]string{
 		1: "Add Product",
 		2: "Change Stock",
-		3: "Add Staff", 
+		3: "Add Staff",
 		4: "Generate Sales Report",
 		5: "Exit",
 	}
@@ -41,8 +42,20 @@ func displayMenu () {
 	fmt.Println("")
 	fmt.Println("Please select menu from below...")
 	fmt.Println("")
-	for i , v := range menu{
-		fmt.Printf("%d. %s\n", i, v)
+
+	// add to list and sort first, since maps don't guarantee order
+	menuList := []MenuItem{}
+	for i, v := range menu {
+		menuList = append(menuList, MenuItem{rank: i, name: v})
+		// fmt.Printf("%d. %s\n", i, v)
+	}
+	// sort
+	slices.SortFunc(menuList, func(a, b MenuItem) int {
+		return a.rank - b.rank
+	})
+
+	for _, item := range menuList {
+		fmt.Printf("%d. %s\n", item.rank, item.name)
 	}
 }
 
@@ -50,18 +63,11 @@ func main() {
 	//load .env file
 	err := godotenv.Load("../.env")
 	if err != nil {
-	  log.Fatal("Error loading .env file ", err)
+		log.Fatal("Error loading .env file ", err)
 	}
 
 	//db connection
-	dns := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", 
-		os.Getenv("DB_USERNAME"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_NAME"),
-	)
-	db, err := sql.Open("mysql", dns)
+	db, err := repo.CreateDBInstance()
 	if err != nil {
 		log.Fatal("Error connecting to database ", err)
 	}
@@ -70,11 +76,15 @@ func main() {
 	fmt.Println("Connection to db successful ")
 	fmt.Println("")
 
+	// create repos
+	productRepo := repo.CreateProductRepo(db)
+
 	//init bufio reader
 	reader := bufio.NewReader(os.Stdout)
 
 	//run apps
-	menuLoop: for{
+menuLoop:
+	for {
 		displayMenu()
 		fmt.Printf("Answer (1/2/3/4/5): ")
 		input, err := reader.ReadString('\n')
@@ -83,21 +93,24 @@ func main() {
 		}
 		input = strings.TrimSpace(input)
 		switch input {
-			case "1":
-				product := getAddProdParam(reader)
-				addProduct(db, product.Name, product.Price, product.Stock)
-				fmt.Println("")
-			case "2":
-				break menuLoop;
-			case "3":
-				staff := getAddStaffParam(reader)
-				addStaff(db, staff.Name, staff.Email, staff.Position)
-				fmt.Println("")
-			case "4":
-				break menuLoop;
-			case "5":
-				break menuLoop;
+		case "1":
+			product := getAddProdParam(reader)
+			productRepo.AddProduct(&product)
+			fmt.Printf("Successfully add %s (%.2f) with qty of %d unit\n", product.Name, product.Price, product.Stock)
+		case "2":
+			RunProductStockModif(reader, productRepo)
+		case "3":
+			staff := getAddStaffParam(reader)
+			addStaff(db, staff.Name, staff.Email, staff.Position)
+		case "4":
+			break menuLoop
+		case "5":
+			break menuLoop
+		default:
+			fmt.Println("Please enter a valid option.")
 		}
+		fmt.Println("")
+		fmt.Println("")
 	}
 }
 func isValidEmail(email string) bool {
@@ -106,7 +119,7 @@ func isValidEmail(email string) bool {
 }
 
 func getAddStaffParam(reader *bufio.Reader) Staff {
-	//get product name 
+	//get product name
 	fmt.Printf("Please insert staff name: ")
 	staffName, err := reader.ReadString('\n')
 	if err != nil {
@@ -118,7 +131,7 @@ func getAddStaffParam(reader *bufio.Reader) Staff {
 		return getAddStaffParam(reader)
 	}
 
-	//get staff email 
+	//get staff email
 	fmt.Printf("Please insert staff email: ")
 	email, err := reader.ReadString('\n')
 	if err != nil {
@@ -135,7 +148,7 @@ func getAddStaffParam(reader *bufio.Reader) Staff {
 		return getAddStaffParam(reader)
 	}
 
-	//get staff position 
+	//get staff position
 	fmt.Printf("Please insert product position: ")
 	position, err := reader.ReadString('\n')
 	if err != nil {
@@ -148,8 +161,8 @@ func getAddStaffParam(reader *bufio.Reader) Staff {
 	}
 
 	return Staff{
-		Name: staffName,
-		Email: email,
+		Name:     staffName,
+		Email:    email,
 		Position: position,
 	}
 }
@@ -164,8 +177,8 @@ func addStaff(db *sql.DB, name, email, position string) {
 	fmt.Printf("Successfully add %s as %s staff\n", name, position)
 }
 
-func getAddProdParam(reader *bufio.Reader) Product {
-	//get product name 
+func getAddProdParam(reader *bufio.Reader) repo.Product {
+	//get product name
 	fmt.Printf("Please insert product name: ")
 	prodName, err := reader.ReadString('\n')
 	if err != nil {
@@ -177,7 +190,7 @@ func getAddProdParam(reader *bufio.Reader) Product {
 		return getAddProdParam(reader)
 	}
 
-	//get product price 
+	//get product price
 	fmt.Printf("Please insert product price: ")
 	price, err := reader.ReadString('\n')
 	if err != nil {
@@ -191,7 +204,7 @@ func getAddProdParam(reader *bufio.Reader) Product {
 		return getAddProdParam(reader)
 	}
 
-	//get product stock 
+	//get product stock
 	fmt.Printf("Please insert product stock: ")
 	stock, err := reader.ReadString('\n')
 	if err != nil {
@@ -203,21 +216,73 @@ func getAddProdParam(reader *bufio.Reader) Product {
 		// log.Fatal("Error converting stock to int ", err)
 		log.Println("Stock should be a number")
 		return getAddProdParam(reader)
-		
+
 	}
-	return Product{
-		Name: prodName,
+	return repo.Product{
+		Name:  prodName,
 		Price: priceFlt,
 		Stock: stockInt,
 	}
 }
 
-func addProduct(db *sql.DB, name string, price float64, stock int) {
-	query := `INSERT INTO Products (Name, Price, Stock)
-		VALUES (?, ?, ?);`
-	_, err := db.Exec(query, name, price, stock)
+// prompts user for product to modify stock
+func RunProductStockModif(reader *bufio.Reader, productRepo repo.ProductRepo) {
+	// prompt product name
+	fmt.Println("Please enter product name to modify stock:")
+	input, err := reader.ReadString('\n')
 	if err != nil {
-		log.Fatal("Error adding product, ", err)
+		// something went wrong exit program
+		log.Fatal(err)
 	}
-	fmt.Printf("Successfully add %s (%.2f) with qty of %d unit\n", name, price, stock)
+
+	productName := strings.TrimSpace(input)
+	if productName == "" {
+		fmt.Println("Product name cannot be empty.")
+		return
+	}
+
+	// check that product exists in DB
+	existingProduct, err := productRepo.GetProductByName(productName)
+	if err != nil || existingProduct == nil {
+		fmt.Printf("Product '%s' does not exist.", productName)
+		return
+	}
+
+	// prompt num of stock to add or reduce
+	//  can be a negative numebr to substract
+	fmt.Println("Please number to add/reduce stock (negative/positive int):")
+	input, err = reader.ReadString('\n')
+	if err != nil {
+		// something went wrong return
+		fmt.Println("Cannot read input. Please try again")
+		return
+	}
+
+	input = strings.TrimSpace(input)
+	if input == "" {
+		fmt.Println("Please enter a valid positive/negative integer.")
+		return
+	}
+
+	// check valid number
+	stockModifNum, err := strconv.Atoi(input)
+	if err != nil {
+		fmt.Println("Please enter a valid positive/negative integer.")
+		return
+	}
+
+	// check enough stock
+	if existingProduct.Stock+stockModifNum < 0 {
+		fmt.Printf("Not enough stock. Current stock: %d\n", existingProduct.Stock)
+		return
+	}
+
+	// update stock
+	existingProduct.Stock += stockModifNum
+	_, err = productRepo.UpdateProduct(existingProduct)
+	if err != nil {
+		fmt.Printf("Failed to update stock: %s\n", err)
+		return
+	}
+	fmt.Printf("\nSuccessfully updated '%s' stock. Current stock: %d\n", existingProduct.Name, existingProduct.Stock)
 }
