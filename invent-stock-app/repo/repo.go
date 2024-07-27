@@ -98,6 +98,7 @@ func (pr *productRepo) GetProductByName(name string) (*Product, error) {
 	return nil, nil
 }
 
+//adds a staff to DB
 func (sr *staffRepo) AddStaff(staff *Staff) error {
 	query := `INSERT INTO Staff (Name, Email, Position)
 		VALUES (?, ?, ?);`

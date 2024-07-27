@@ -15,7 +15,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-
 type MenuItem struct {
 	rank int
 	name string
@@ -73,7 +72,7 @@ func main() {
 	// create repos
 	productRepo := repo.CreateProductRepo(db)
 	staffRepo := repo.CreateStaffRepo(db)
-
+	
 	//init bufio reader
 	reader := bufio.NewReader(os.Stdout)
 
@@ -136,7 +135,6 @@ func selectOption [K repo.Staff | repo.Product ] (reader *bufio.Reader, function
 		selectOption(reader, function)
 	}
 	return zero
-
 }
 //function to make user back to main menu
 func isZeroValue[K repo.Staff | repo.Product](value K) bool {
