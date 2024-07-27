@@ -11,18 +11,38 @@ type Product struct {
 	Stock int
 }
 
+type Staff struct {
+	Name     string
+	Email    string
+	Position string
+}
+
 type ProductRepo interface {
 	AddProduct(product *Product) error
 	UpdateProduct(product *Product) (*int64, error)
 	GetProductByName(name string) (*Product, error)
 }
 
+type StaffRepo interface {
+	AddStaff(staff *Staff) error
+}
+
 type productRepo struct {
+	db *sql.DB
+}
+
+type staffRepo struct {
 	db *sql.DB
 }
 
 func CreateProductRepo(db *sql.DB) ProductRepo {
 	return &productRepo{
+		db: db,
+	}
+}
+
+func CreateStaffRepo(db *sql.DB) StaffRepo {
+	return &staffRepo{
 		db: db,
 	}
 }
@@ -76,4 +96,15 @@ func (pr *productRepo) GetProductByName(name string) (*Product, error) {
 	}
 
 	return nil, nil
+}
+
+//adds a staff to DB
+func (sr *staffRepo) AddStaff(staff *Staff) error {
+	query := `INSERT INTO Staff (Name, Email, Position)
+		VALUES (?, ?, ?);`
+	_, err := sr.db.Exec(query, staff.Name, staff.Email, staff.Position)
+	if err != nil {
+		return err
+	}
+	return nil
 }

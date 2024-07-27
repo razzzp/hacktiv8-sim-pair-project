@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"database/sql"
 	"fmt"
 	"invent-stock-app/repo"
 	"log"
@@ -15,12 +14,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 )
-
-type Staff struct {
-	Name     string
-	Email    string
-	Position string
-}
 
 type MenuItem struct {
 	rank int
@@ -78,7 +71,8 @@ func main() {
 
 	// create repos
 	productRepo := repo.CreateProductRepo(db)
-
+	staffRepo := repo.CreateStaffRepo(db)
+	
 	//init bufio reader
 	reader := bufio.NewReader(os.Stdout)
 
@@ -95,13 +89,21 @@ menuLoop:
 		switch input {
 		case "1":
 			product := getAddProdParam(reader)
+			if isZeroValue(product) {
+				continue
+			}
 			productRepo.AddProduct(&product)
 			fmt.Printf("Successfully add %s (%.2f) with qty of %d unit\n", product.Name, product.Price, product.Stock)
 		case "2":
 			RunProductStockModif(reader, productRepo)
 		case "3":
 			staff := getAddStaffParam(reader)
-			addStaff(db, staff.Name, staff.Email, staff.Position)
+			if isZeroValue(staff) {
+				continue
+			}
+			staffRepo.AddStaff(&staff)
+			fmt.Printf("Successfully add %s as %s staff\n", staff.Name, staff.Position)
+			fmt.Println("")
 		case "4":
 			break menuLoop
 		case "5":
@@ -113,12 +115,39 @@ menuLoop:
 		fmt.Println("")
 	}
 }
+
+//function to make user able to select option wether backt reinputting or to main menu
+func selectOption [K repo.Staff | repo.Product ] (reader *bufio.Reader, function func(*bufio.Reader) K) K {
+	fmt.Printf("Would you like to reinput data (y/n): ")
+	resp, err := reader.ReadString('\n')
+	if err != nil {
+		log.Fatal("Error reading response input", err)
+	}
+	resp = strings.TrimSpace(resp)
+	var zero K
+	switch resp {
+	case "y":
+		return function(reader)
+	case "n":
+		return zero
+	default:
+		fmt.Println("Input invalid, please reinput response")
+		selectOption(reader, function)
+	}
+	return zero
+}
+//function to make user back to main menu
+func isZeroValue[K repo.Staff | repo.Product](value K) bool {
+	var zero K
+	return value == zero
+}
+
 func isValidEmail(email string) bool {
 	_, err := mail.ParseAddress(email)
 	return err == nil
 }
 
-func getAddStaffParam(reader *bufio.Reader) Staff {
+func getAddStaffParam(reader *bufio.Reader) repo.Staff {
 	//get product name
 	fmt.Printf("Please insert staff name: ")
 	staffName, err := reader.ReadString('\n')
@@ -128,7 +157,7 @@ func getAddStaffParam(reader *bufio.Reader) Staff {
 	staffName = strings.TrimSpace(staffName)
 	if staffName == "" {
 		log.Println("Staff name should not be empty")
-		return getAddStaffParam(reader)
+		return selectOption(reader, getAddStaffParam)
 	}
 
 	//get staff email
@@ -140,12 +169,12 @@ func getAddStaffParam(reader *bufio.Reader) Staff {
 	email = strings.TrimSpace(email)
 	if email == "" {
 		log.Println("Staff email should not be empty")
-		return getAddStaffParam(reader)
+		return selectOption(reader, getAddStaffParam)
 	}
 	//validate email
 	if res := isValidEmail(email); !res {
 		log.Println("Invalid Email Format")
-		return getAddStaffParam(reader)
+		return selectOption(reader, getAddStaffParam)
 	}
 
 	//get staff position
@@ -157,24 +186,14 @@ func getAddStaffParam(reader *bufio.Reader) Staff {
 	position = strings.TrimSpace(position)
 	if position == "" {
 		log.Println("Staff position should not be empty")
-		return getAddStaffParam(reader)
+		return selectOption(reader, getAddStaffParam)
 	}
 
-	return Staff{
+	return repo.Staff{
 		Name:     staffName,
 		Email:    email,
 		Position: position,
 	}
-}
-
-func addStaff(db *sql.DB, name, email, position string) {
-	query := `INSERT INTO Staff (Name, Email, Position)
-		VALUES (?, ?, ?);`
-	_, err := db.Exec(query, name, email, position)
-	if err != nil {
-		log.Fatal("Error adding staff, ", err)
-	}
-	fmt.Printf("Successfully add %s as %s staff\n", name, position)
 }
 
 func getAddProdParam(reader *bufio.Reader) repo.Product {
@@ -187,7 +206,8 @@ func getAddProdParam(reader *bufio.Reader) repo.Product {
 	prodName = strings.TrimSpace(prodName)
 	if prodName == "" {
 		log.Println("Product name should not be empty")
-		return getAddProdParam(reader)
+		return selectOption(reader, getAddProdParam)
+
 	}
 
 	//get product price
@@ -199,9 +219,8 @@ func getAddProdParam(reader *bufio.Reader) repo.Product {
 	price = strings.TrimSpace(price)
 	priceFlt, err := strconv.ParseFloat(price, 64)
 	if err != nil {
-		// log.Println("Error converting price to float64 ", err)
 		log.Println("Price should be a number")
-		return getAddProdParam(reader)
+		return selectOption(reader, getAddProdParam)
 	}
 
 	//get product stock
@@ -213,13 +232,16 @@ func getAddProdParam(reader *bufio.Reader) repo.Product {
 	stock = strings.TrimSpace(stock)
 	stockInt, err := strconv.Atoi(stock)
 	if err != nil {
-		// log.Fatal("Error converting stock to int ", err)
 		log.Println("Stock should be a number")
-		return getAddProdParam(reader)
-
+		return selectOption(reader, getAddProdParam)
+		
+	}
+	if stockInt < 0 {
+		log.Println("Stock should be a positive number")
+		return selectOption(reader, getAddProdParam)
 	}
 	return repo.Product{
-		Name:  prodName,
+		Name: prodName,
 		Price: priceFlt,
 		Stock: stockInt,
 	}
