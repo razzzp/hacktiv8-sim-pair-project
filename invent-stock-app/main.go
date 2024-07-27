@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/mail"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -15,9 +16,9 @@ import (
 )
 
 
-type ProductModifStockParam struct {
-	ProductName   string
-	StockNumToAdd int
+type MenuItem struct {
+	rank int
+	name string
 }
 
 func displayMenu() {
@@ -35,8 +36,20 @@ func displayMenu() {
 	fmt.Println("")
 	fmt.Println("Please select menu from below...")
 	fmt.Println("")
+
+	// add to list and sort first, since maps don't guarantee order
+	menuList := []MenuItem{}
 	for i, v := range menu {
-		fmt.Printf("%d. %s\n", i, v)
+		menuList = append(menuList, MenuItem{rank: i, name: v})
+		// fmt.Printf("%d. %s\n", i, v)
+	}
+	// sort
+	slices.SortFunc(menuList, func(a, b MenuItem) int {
+		return a.rank - b.rank
+	})
+
+	for _, item := range menuList {
+		fmt.Printf("%d. %s\n", item.rank, item.name)
 	}
 }
 
@@ -82,10 +95,8 @@ menuLoop:
 			}
 			productRepo.AddProduct(&product)
 			fmt.Printf("Successfully add %s (%.2f) with qty of %d unit\n", product.Name, product.Price, product.Stock)
-			fmt.Println("")
 		case "2":
-			RunProducStockModif(reader, productRepo)
-			fmt.Println("")
+			RunProductStockModif(reader, productRepo)
 		case "3":
 			staff := getAddStaffParam(reader)
 			if isZeroValue(staff) {
@@ -101,6 +112,8 @@ menuLoop:
 		default:
 			fmt.Println("Please enter a valid option.")
 		}
+		fmt.Println("")
+		fmt.Println("")
 	}
 }
 
@@ -237,7 +250,7 @@ func getAddProdParam(reader *bufio.Reader) repo.Product {
 }
 
 // prompts user for product to modify stock
-func RunProducStockModif(reader *bufio.Reader, productRepo repo.ProductRepo) {
+func RunProductStockModif(reader *bufio.Reader, productRepo repo.ProductRepo) {
 	// prompt product name
 	fmt.Println("Please enter product name to modify stock:")
 	input, err := reader.ReadString('\n')
@@ -284,11 +297,16 @@ func RunProducStockModif(reader *bufio.Reader, productRepo repo.ProductRepo) {
 
 	// check enough stock
 	if existingProduct.Stock+stockModifNum < 0 {
-		fmt.Printf("Not enough stock. Current stock: %s", existingProduct.Stock)
+		fmt.Printf("Not enough stock. Current stock: %d\n", existingProduct.Stock)
 		return
 	}
 
 	// update stock
 	existingProduct.Stock += stockModifNum
-	productRepo.UpdateProduct(existingProduct)
+	_, err = productRepo.UpdateProduct(existingProduct)
+	if err != nil {
+		fmt.Printf("Failed to update stock: %s\n", err)
+		return
+	}
+	fmt.Printf("\nSuccessfully updated '%s' stock. Current stock: %d\n", existingProduct.Name, existingProduct.Stock)
 }
